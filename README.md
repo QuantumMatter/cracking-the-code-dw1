@@ -1,15 +1,17 @@
 # Neural Encoding Analysis
 
-fMRI data and feature matrices for analyzing neural representations of object stimuli.
+fMRI data from a **single subject** viewing images of objects. This dataset contains voxelwise responses from functionally defined ROIs to 81 categories of objects (e.g., airplane, boat, car, tree).
 
 ## Dataset Overview
 
-**81 object stimuli** (airplane, armchair, bathtub, etc.) with:
+**81 object categories** with mean responses to 10 images per category:
 - Neural responses from 7 brain regions (696 voxels total)
-- AlexNet features (20-dimensional)
-- Word2Vec features (30-dimensional)
+- AlexNet features: 20 principal components from 5 convolutional layers
+- Word2Vec features: 30 principal components
 
-All datasets are **index-aligned**: row `i` in each file corresponds to the same stimulus.
+**Important**: The neural data (betas) are **mean voxelwise responses** across 10 images per category, derived from a GLM with a regressor for each object category.
+
+All datasets are **index-aligned**: row `i` in each file corresponds to the same object category.
 
 ## Data Files
 
@@ -17,24 +19,35 @@ All datasets are **index-aligned**: row `i` in each file corresponds to the same
 
 Dictionary with 4 keys:
 
-- **`betas`** (81 × 696): Neural responses - rows=stimuli, columns=voxels
-- **`conds`** (81 × 1): Stimulus labels ('airplane', 'chair', etc.)
-- **`indices`** (1 × 696): Maps each voxel to its ROI (values 1-7)
-- **`rois`** (1 × 7): ROI names: `['EVC', 'OPA', 'PPA', 'LOC', 'PFS', 'OFA', 'FFA']`
+- **`betas`** (81 × 696): Voxelwise responses to each condition (mean beta values from GLM)
+  - Rows = object categories
+  - Columns = voxels
 
-**Brain Regions:**
+- **`conds`** (81 × 1): Object category labels (e.g., 'airplane', 'boat', 'car')
+  - Order corresponds to rows in `betas`
+
+- **`indices`** (1 × 696): Voxel-to-ROI mapping (values 1-7)
+  - Each value indicates which ROI that voxel belongs to
+  - Example: `inds = indices == 2` selects all OPA voxels
+
+- **`rois`** (1 × 7): ROI names in order
+  - `['EVC', 'OPA', 'PPA', 'LOC', 'PFS', 'OFA', 'FFA']`
+
+**Brain Regions (ROIs):**
 - **EVC**: Early Visual Cortex (100 voxels)
 - **OPA**: Occipital Place Area (100 voxels)
 - **PPA**: Parahippocampal Place Area (100 voxels)
 - **LOC**: Lateral Occipital Complex (96 voxels)
-- **PFS**: Parietal Face-Selective (100 voxels)
+- **PFS**: Posterior Fusiform (100 voxels)
 - **OFA**: Occipital Face Area (100 voxels)
 - **FFA**: Fusiform Face Area (100 voxels)
 
 ### 2. Feature Matrices
 
-- **`alexnet.mat`**: 81 × 20 AlexNet features
-- **`word2vec.mat`**: 81 × 30 Word2Vec features
+- **`alexnet.mat`**: 81 × 20 principal components from AlexNet's 5 convolutional layers (trained on ImageNet)
+- **`word2vec.mat`**: 81 × 30 principal components from word2vec embeddings
+
+Both feature matrices contain **mean responses** to all 10 images per category.
 
 ## Usage
 
@@ -46,12 +59,12 @@ from load_neural_data import load_neural_data, get_roi_data
 # Load all data
 data = load_neural_data()
 
-# Get specific ROI
+# Get specific ROI responses (all categories)
 ffa_responses = get_roi_data(data, 'FFA')  # Shape: (81, 100)
 
-# Access specific stimulus
-airplane_response = data['betas'][0, :]  # All voxels for "airplane"
-stimulus_name = data['conds'][0]  # 'airplane'
+# Access specific category response
+airplane_response = data['betas'][0, :]  # All 696 voxels for "airplane" category
+category_name = data['conds'][0]  # ['airplane']
 ```
 
 ### Load Feature Matrices
@@ -60,45 +73,50 @@ stimulus_name = data['conds'][0]  # 'airplane'
 from load_feature_matrices import analyze_features
 
 alexnet, word2vec = analyze_features()
-# alexnet: (81, 20)
-# word2vec: (81, 30)
+# alexnet: (81, 20) - mean AlexNet features per category
+# word2vec: (81, 30) - mean Word2Vec features per category
 ```
 
-### Example: Get FFA response to "airplane"
+### Example: Get FFA response to "airplane" category
 
 ```python
 data = load_neural_data()
 
 # Method 1: Using helper function
 ffa_data = get_roi_data(data, 'FFA')
-airplane_ffa = ffa_data[0, :]  # 100 FFA voxels
+airplane_ffa = ffa_data[0, :]  # 100 FFA voxels, mean response to airplane
 
-# Method 2: Manual indexing
+# Method 2: Manual indexing (equivalent)
 ffa_mask = data['indices'].flatten() == 7
 airplane_ffa = data['betas'][0, ffa_mask]
 ```
 
 ## Data Structure
 
+All arrays are **index-aligned** by object category:
+
 ```
-conds[0] = 'airplane'  ←→  betas[0, :] = all voxel responses to airplane
-conds[1] = 'armchair'  ←→  betas[1, :] = all voxel responses to armchair
+conds[0] = 'airplane'  ←→  betas[0, :] = mean voxel responses to airplane category (10 images)
+conds[1] = 'armchair'  ←→  betas[1, :] = mean voxel responses to armchair category (10 images)
 ...
-conds[80] = 'vase'     ←→  betas[80, :] = all voxel responses to vase
+conds[80] = 'vase'     ←→  betas[80, :] = mean voxel responses to vase category (10 images)
 ```
 
 **Key Point**: Index `i` is consistent across all datasets:
-- `conds[i]` = stimulus name
-- `betas[i, :]` = neural response
-- `alexnet[i, :]` = AlexNet features
-- `word2vec[i, :]` = Word2Vec features
+- `conds[i]` = object category name
+- `betas[i, :]` = mean neural response (696 voxels)
+- `alexnet[i, :]` = mean AlexNet features (20 PCs)
+- `word2vec[i, :]` = mean Word2Vec features (30 PCs)
 
-## Verification
+### Extracting ROI Data
 
-Run `verify_data.py` to check data integrity:
+To get data for a specific ROI, use the `indices` array:
 
-```bash
-uv run python verify_data.py
+```python
+# Get all voxels for ROI 2 (OPA)
+roi_idx = 2
+inds = data['indices'].flatten() == roi_idx
+roi_betas = data['betas'][:, inds]  # Shape: (81, 100)
 ```
 
 ## Requirements
